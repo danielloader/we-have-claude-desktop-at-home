@@ -77,6 +77,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "anthropic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "uvicorn" },
@@ -92,6 +93,7 @@ elastic = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "anyio" },
     { name = "httpx" },
     { name = "pytest" },
 ]
@@ -103,6 +105,7 @@ requires-dist = [
     { name = "elastic-apm", marker = "extra == 'apm'", specifier = ">=6.26.2" },
     { name = "elasticsearch", marker = "extra == 'elastic'", specifier = ">=8.15" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "pyjwt", specifier = ">=2.9" },
     { name = "uvicorn", specifier = ">=0.30" },
@@ -111,6 +114,7 @@ provides-extras = ["elastic", "apm"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "anyio", specifier = ">=4" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pytest", specifier = ">=8" },
 ]

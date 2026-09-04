@@ -1,6 +1,7 @@
 from ..config import Settings
 from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
+from .ollama import OllamaProvider
 from .stub import StubProvider
 
 
@@ -22,5 +23,11 @@ def build_llm(settings: Settings) -> LLMProvider:
                 api_key=settings.azure_api_key,
                 model=settings.llm_model,
                 max_tokens=settings.llm_max_tokens,
+            )
+        case "ollama":
+            return OllamaProvider(
+                base_url=settings.ollama_url,
+                model=settings.llm_model,
+                think=settings.ollama_think,
             )
     raise ValueError(f"unknown llm provider {settings.llm_provider!r}")

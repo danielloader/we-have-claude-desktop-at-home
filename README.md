@@ -40,7 +40,7 @@ they can be mixed freely.
 
 | Switch | Values | Default |
 |--------|--------|---------|
-| `APP_LLM_PROVIDER` | `stub`, `anthropic`, `azure` | `stub` |
+| `APP_LLM_PROVIDER` | `stub`, `ollama`, `anthropic`, `azure` | `stub` |
 | `APP_CHAT_STORE` | `sqlite`, `elastic` | `sqlite` |
 | `APP_TELEMETRY` | `file`, `elastic_apm`, `none` | `file` |
 
@@ -80,7 +80,27 @@ its spans and metrics; `APP_TELEMETRY_FILE_FORMAT=jsonl` makes it `jq`-friendly.
 Keep SQLite and the telemetry file, switch only the provider. This is for checking that
 prompts, streaming and thinking display behave with the real thing.
 
-Anthropic API:
+**A small local model with Ollama (no account, no cost, CPU only).** `qwen3:0.6b` is about
+half a gigabyte, streams a separate thinking phase, and runs at a usable pace on a laptop CPU.
+
+```bash
+docker run -d --name ollama -p 11434:11434 -v ollama-models:/root/.ollama ollama/ollama
+docker exec ollama ollama pull qwen3:0.6b
+```
+
+```dotenv
+APP_LLM_PROVIDER=ollama
+APP_LLM_MODEL=qwen3:0.6b
+APP_OLLAMA_URL=http://localhost:11434
+```
+
+Any model in the Ollama library works; `APP_OLLAMA_THINK=false` skips the thinking request
+for models that lack it (the provider also detects that and falls back on its own). Token
+counts are the model's real counts. Expect a second or two before the first token and
+somewhere between 10 and 30 tokens per second on an Apple Silicon laptop through Docker
+Desktop; slower models make the stub's pacing knobs look generous.
+
+**Anthropic API:**
 
 ```dotenv
 APP_LLM_PROVIDER=anthropic
@@ -88,7 +108,7 @@ APP_LLM_MODEL=claude-opus-5
 ANTHROPIC_API_KEY=sk-ant-...        # or run `ant auth login` and leave this unset
 ```
 
-Azure AI (Claude on Microsoft Foundry):
+**Azure AI (Claude on Microsoft Foundry):**
 
 ```dotenv
 APP_LLM_PROVIDER=azure
@@ -200,6 +220,18 @@ docker compose logs -f app          # server log and telemetry lines together
 container. It pins the SQLite path to the `/data` volume and telemetry to `/dev/stderr`, so
 state survives restarts and telemetry goes wherever your container logs go.
 
+### Local model with compose
+
+`compose.ollama.yaml` is an overlay that adds an Ollama service, pulls the model into a
+volume on first start, and points the app at it:
+
+```bash
+docker compose -f compose.yaml -f compose.ollama.yaml up --build
+OLLAMA_MODEL=qwen2.5:0.5b docker compose -f compose.yaml -f compose.ollama.yaml up --build   # a different model
+```
+
+The Ollama port is also published on 11434 so a host-side `uv run` can share the server.
+
 ### Plain docker
 
 ```bash
@@ -255,6 +287,7 @@ app/
     base.py          LLMProvider protocol + provider-neutral StreamEvent
     stub.py          fixed response, random lag, randomised token rate, occasional stalls
     anthropic_provider.py  Claude via the Anthropic API or Azure AI (Microsoft Foundry)
+    ollama.py        local CPU model via Ollama's streaming API (thinking supported)
     factory.py       picks a provider from APP_LLM_PROVIDER
   storage/
     base.py          UserStore and ChatStore protocols
@@ -271,6 +304,7 @@ app/
 tests/test_app.py    end-to-end tests through the ASGI app with the stub provider
 Dockerfile           two-stage uv build, non-root, /data volume
 compose.yaml         stub mode in a container, reads .env
+compose.ollama.yaml  overlay: local CPU model via Ollama
 ```
 
 ## API summary

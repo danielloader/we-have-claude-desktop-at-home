@@ -14,7 +14,7 @@ chat history, and somewhere to send traces and metrics. Each is expressed as a s
 
 | Seam | Protocol | Local / test implementation | Production implementation |
 |------|----------|-----------------------------|---------------------------|
-| Model | `app/llm/base.py` `LLMProvider` | `StubProvider` | `AnthropicProvider` (Anthropic API or Azure AI / Foundry) |
+| Model | `app/llm/base.py` `LLMProvider` | `StubProvider`, `OllamaProvider` (small local model) | `AnthropicProvider` (Anthropic API or Azure AI / Foundry) |
 | Chat history | `app/storage/base.py` `ChatStore` | `SqliteChatStore` | `ElasticChatStore` |
 | Observability | `app/telemetry/base.py` `Telemetry` | `FileTelemetry` | `ElasticApmTelemetry` |
 
@@ -79,7 +79,12 @@ of types: `thinking_start`, `thinking_delta`, `thinking_stop`, `text_delta`, `do
 `done` event carries token usage and the stop reason. This is the whole contract between a
 provider and the rest of the service. The Anthropic implementation maps the SDK's
 `content_block_start` / `content_block_delta` / `content_block_stop` events onto it; the
-stub generates it directly.
+Ollama implementation maps the `thinking` and `content` fields of Ollama's line-delimited
+JSON stream; the stub generates it directly. Three very different transports, one consumer.
+
+The Ollama provider is the middle ground between stub and production: a real model with
+real token counts and real thinking, running on a laptop CPU with no credentials, for when
+the stub's fixed answer is not enough but spending API tokens is not warranted either.
 
 Keeping this set small is deliberate. Tool use, citations and images would be added as new
 event types, and every consumer (the SSE route today, perhaps a websocket or a batch job

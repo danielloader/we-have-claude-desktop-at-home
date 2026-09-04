@@ -10,6 +10,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "pyjwt>=2.9",
     "anthropic>=1.0",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -19,10 +20,13 @@ apm = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx>=0.27", "anyio>=4"]
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+addopts = "-p anyio"
 
 [tool.ruff]
 line-length = 110

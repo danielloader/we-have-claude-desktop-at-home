@@ -1,0 +1,38 @@
+# Overlay: run the app against a local CPU model served by Ollama.
+#   docker compose -f compose.yaml -f compose.ollama.yaml up --build
+# First start pulls the model (about 0.5 GB for qwen3:0.6b) into the ollama-models volume.
+services:
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"     # optional: lets `uv run` on the host use the same server
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull"]
+    command: ["${OLLAMA_MODEL:-qwen3:0.6b}"]
+    restart: "no"
+
+  app:
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      APP_LLM_PROVIDER: ollama
+      APP_LLM_MODEL: ${OLLAMA_MODEL:-qwen3:0.6b}
+      APP_OLLAMA_URL: http://ollama:11434
+
+volumes:
+  ollama-models:

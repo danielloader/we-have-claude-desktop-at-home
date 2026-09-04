@@ -14,7 +14,7 @@ class SeedUser(BaseModel):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="APP_", extra="ignore")
 
-    llm_provider: Literal["stub", "anthropic", "azure"] = "stub"
+    llm_provider: Literal["stub", "anthropic", "azure", "ollama"] = "stub"
     chat_store: Literal["sqlite", "elastic"] = "sqlite"
 
     sqlite_path: str = "./data/app.db"
@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     # the API key can also come from ANTHROPIC_FOUNDRY_API_KEY.
     azure_resource: str | None = None
     azure_api_key: str | None = None
+
+    # Ollama: a local CPU-friendly model. APP_LLM_MODEL names the Ollama model, e.g. qwen3:0.6b.
+    ollama_url: str = "http://localhost:11434"
+    ollama_think: bool = True
 
     stub_lag_min_s: float = 0.8
     stub_lag_max_s: float = 3.0
