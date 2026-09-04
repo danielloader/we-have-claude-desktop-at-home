@@ -1,0 +1,20 @@
+# Local stub mode in a container: `docker compose up --build`, then open http://127.0.0.1:8765
+# Switch modes by editing .env (see README "Running modes"); the paths below always win so
+# state lands on the named volume regardless of what .env says.
+services:
+  app:
+    build: .
+    ports:
+      - "8765:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_SQLITE_PATH: /data/app.db
+      APP_TELEMETRY_FILE: /data/telemetry.log
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+
+volumes:
+  app-data:

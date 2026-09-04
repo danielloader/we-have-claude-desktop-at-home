@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude at home</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23d97757%27 d=%27M12 1.5l1.6 6.2 4.6-4.4-2.5 5.9 6.3-.9-5.7 2.9 5.7 2.9-6.3-.9 2.5 5.9-4.6-4.4L12 22.5l-1.6-6.2-4.6 4.4 2.5-5.9-6.3.9 5.7-2.9-5.7-2.9 6.3.9-2.5-5.9 4.6 4.4z%27/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #faf9f5; --panel: #f4f3ee; --border: #e7e5dc; --text: #1f1e1d; --muted: #75726a;
+    --accent: #d97757; --bubble: #f0eee6; --card: #ffffff; --hover: #eae8df; --danger: #b3412c;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 15px/1.55 var(--sans); color: var(--text); background: var(--bg); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:disabled { cursor: default; opacity: .5; }
+  input, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  a { color: inherit; }
+
+  /* ---------- layout ---------- */
+  #app { display: flex; height: 100%; }
+  #sidebar {
+    width: 280px; flex: 0 0 auto; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden; transition: width .18s ease, opacity .18s;
+  }
+  #sidebar.collapsed { width: 0; border-right-color: transparent; opacity: 0; }
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+  /* ---------- sidebar ---------- */
+  .sb-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 16px 10px 20px; }
+  .wordmark { font: 500 22px/1 var(--serif); letter-spacing: -.01em; white-space: nowrap; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; color: var(--muted); }
+  .icon-btn:hover { background: var(--hover); color: var(--text); }
+  .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #new-chat {
+    margin: 4px 10px 8px; padding: 9px 12px; border-radius: 10px; display: flex; gap: 10px; align-items: center;
+    background: var(--hover); font-weight: 500; white-space: nowrap;
+  }
+  #new-chat:hover { background: #e2e0d6; }
+  .sb-section { padding: 14px 20px 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  #conv-list { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
+  #conv-list li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  #conv-list li:hover { background: var(--hover); }
+  #conv-list li.active { background: var(--hover); font-weight: 500; }
+  #conv-list li .dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #c9c6bb; flex: 0 0 auto; }
+  #conv-list li.active .dot { background: var(--accent); border-color: var(--accent); }
+  #conv-list li .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  #conv-list li .del { opacity: 0; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+  #conv-list li:hover .del { opacity: 1; }
+  #conv-list li .del:hover { color: var(--danger); background: #ecd9d3; }
+  .sb-foot { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .sb-link { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; white-space: nowrap; }
+  .sb-link:hover { background: var(--hover); }
+  .sb-link.active { background: var(--hover); font-weight: 500; }
+  .who { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #dfe7f1; color: #3a5a8a; display: grid; place-items: center; font-weight: 600; font-size: 13px; flex: 0 0 auto; }
+  .who .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who .name small { color: var(--muted); margin-left: 6px; }
+
+  .budget { padding: 4px 10px 8px; font-size: 12px; color: var(--muted); }
+  .budget .bar { height: 5px; border-radius: 3px; background: #e2e0d6; overflow: hidden; margin: 5px 0 3px; }
+  .budget .fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+  .budget.warn .fill { background: var(--danger); }
+  .budget .row { display: flex; justify-content: space-between; white-space: nowrap; gap: 8px; }
+  tfoot td { font-weight: 600; background: var(--panel); }
+  .budget-edit { width: 90px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); font-size: 13px; text-align: right; }
+  .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .card .k { font-size: 12px; color: var(--muted); } .card .v { font: 500 22px/1.2 var(--serif); margin-top: 2px; }
+
+  /* ---------- main ---------- */
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 12px 14px; min-height: 52px; }
+  .topbar .crumb { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .badge { margin-left: auto; font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; background: var(--card); }
+  .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  #view-home { align-items: center; justify-content: center; padding: 0 20px 12vh; }
+  .greeting { display: flex; align-items: center; gap: 14px; font: 400 40px/1.1 var(--serif); letter-spacing: -.02em; margin-bottom: 30px; text-align: center; }
+  .greeting svg { width: 40px; height: 40px; flex: 0 0 auto; }
+
+  .composer {
+    width: 100%; max-width: 780px; background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: 0 6px 24px rgba(40,35,20,.06); padding: 12px 14px 10px;
+  }
+  .composer textarea {
+    display: block; width: 100%; border: 0; outline: 0; resize: none; background: transparent; padding: 6px 6px 8px;
+    min-height: 44px; max-height: 40vh; font-size: 16px; line-height: 1.5;
+  }
+  .composer textarea::placeholder { color: #9a978e; }
+  .composer-row { display: flex; align-items: center; gap: 10px; padding: 2px 4px 0; }
+  .composer-row .model { margin-left: auto; font-size: 14px; color: var(--muted); }
+  .composer-row .model b { color: var(--text); font-weight: 500; }
+  .send { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; }
+  .send:hover:not(:disabled) { filter: brightness(.95); }
+  .send svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  #view-chat { min-height: 0; }
+  #messages { flex: 1; overflow-y: auto; padding: 8px 20px 24px; }
+  .thread { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .msg.user { align-self: flex-end; max-width: 85%; background: var(--bubble); padding: 10px 16px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.assistant { display: flex; gap: 12px; }
+  .msg.assistant .spark { width: 26px; height: 26px; flex: 0 0 auto; margin-top: 4px; }
+  .msg.assistant .content { min-width: 0; flex: 1; }
+  .body p { margin: 0 0 12px; } .body p:last-child { margin-bottom: 0; }
+  .body pre { background: #f2f0e9; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font: 13px/1.5 var(--mono); }
+  .body code { font: 13px var(--mono); background: #f2f0e9; padding: 1px 5px; border-radius: 5px; }
+  .body pre code { background: none; padding: 0; }
+  .body ul, .body ol { margin: 0 0 12px; padding-left: 24px; }
+  .thinking { margin-bottom: 10px; }
+  .thinking-toggle { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; padding: 2px 0; }
+  .thinking-toggle .chev { display: inline-block; transition: transform .15s; }
+  .thinking.open .chev { transform: rotate(90deg); }
+  .shimmer { background: linear-gradient(90deg, var(--muted) 0%, #c9c6bb 50%, var(--muted) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.4s linear infinite; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .thinking-body { margin: 8px 0 0; padding: 10px 14px; border-left: 2px solid var(--border); color: var(--muted); font-size: 14px; white-space: pre-wrap; font-family: inherit; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .stamp { font-size: 12px; color: var(--muted); margin-bottom: -14px; }
+  .stamp.right { align-self: flex-end; }
+  .caret::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; background: var(--accent); vertical-align: middle; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .dock { padding: 8px 20px 18px; display: flex; flex-direction: column; align-items: center; }
+  .readonly-banner { max-width: 780px; width: 100%; margin: 0 auto 8px; padding: 10px 14px; border-radius: 10px; background: #fbeee8; color: #7a3a24; font-size: 14px; }
+  .error { color: var(--danger); }
+
+  /* ---------- admin ---------- */
+  #view-admin { padding: 0 24px 24px; overflow-y: auto; }
+  .admin-wrap { max-width: 900px; margin: 0 auto; width: 100%; }
+  .admin-wrap h1 { font: 400 30px/1.2 var(--serif); margin: 6px 0 18px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .tabs button { padding: 8px 14px; border-radius: 8px 8px 0 0; color: var(--muted); }
+  .tabs button.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--muted); font-weight: 500; background: var(--panel); }
+  tr:last-child td { border-bottom: 0; }
+  tr.clickable { cursor: pointer; } tr.clickable:hover td { background: #faf9f4; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #e6eef8; color: #2f4f7f; }
+  .form-row { display: flex; gap: 10px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+  .form-row input[type=text], .form-row input[type=password] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+  .btn { padding: 8px 14px; border-radius: 8px; background: var(--text); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--danger); }
+  .btn.ghost:hover { background: #f5e4de; }
+
+  /* ---------- login ---------- */
+  #login { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; }
+  .login-card { width: 360px; max-width: 92vw; }
+  .login-card h1 { font: 400 34px/1.1 var(--serif); margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
+  .login-card p { color: var(--muted); margin: 0 0 22px; }
+  .login-card input { display: block; width: 100%; padding: 12px 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); font-size: 15px; }
+  .login-card .btn { width: 100%; padding: 12px; border-radius: 10px; margin-top: 6px; }
+  .login-card .error { min-height: 20px; font-size: 14px; margin-top: 10px; }
+
+  @media (max-width: 760px) {
+    #sidebar { position: fixed; z-index: 5; height: 100%; box-shadow: 8px 0 30px rgba(0,0,0,.08); }
+    .greeting { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<svg hidden xmlns="http://www.w3.org/2000/svg">
+  <symbol id="spark" viewBox="0 0 24 24">
+    <path fill="#d97757" d="M12 1.5l1.6 6.2 4.6-4.4-2.5 5.9 6.3-.9-5.7 2.9 5.7 2.9-6.3-.9 2.5 5.9-4.6-4.4L12 22.5l-1.6-6.2-4.6 4.4 2.5-5.9-6.3.9 5.7-2.9-5.7-2.9 6.3.9-2.5-5.9 4.6 4.4z"/>
+  </symbol>
+</svg>
+
+<div id="login" hidden>
+  <form class="login-card" id="login-form">
+    <h1><svg width="30" height="30"><use href="#spark"/></svg>Claude at home</h1>
+    <p>Sign in to continue.</p>
+    <input id="login-user" type="text" placeholder="Username" autocomplete="username" required>
+    <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Sign in</button>
+    <div class="error" id="login-error"></div>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <aside id="sidebar">
+    <div class="sb-head">
+      <span class="wordmark">Claude</span>
+      <button class="icon-btn" id="collapse" title="Hide sidebar">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+      </button>
+    </div>
+    <button id="new-chat"><span style="font-size:18px;line-height:1">+</span> New chat</button>
+    <div class="sb-section">Chats</div>
+    <ul id="conv-list"></ul>
+    <div class="sb-foot">
+      <button class="sb-link" id="admin-link" hidden>
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Admin
+      </button>
+      <div class="budget" id="budget" title="Token budget for the current period">
+        <div class="row"><span id="budget-used">–</span><span id="budget-period"></span></div>
+        <div class="bar"><div class="fill" id="budget-fill" style="width:0%"></div></div>
+        <div class="row"><span id="budget-remaining"></span></div>
+      </div>
+      <div class="who">
+        <div class="avatar" id="avatar">?</div>
+        <div class="name"><span id="who-name"></span><small id="who-role"></small></div>
+        <button class="icon-btn" id="logout" title="Sign out">
+          <svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <button class="icon-btn" id="expand" title="Show sidebar" hidden>
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+      </button>
+      <span class="crumb" id="crumb"></span>
+      <span class="badge" id="badge"></span>
+    </div>
+
+    <section class="view" id="view-home">
+      <div class="greeting"><svg><use href="#spark"/></svg><span id="greeting-text">Hello</span></div>
+      <div id="home-composer-slot" style="width:100%;display:flex;flex-direction:column;align-items:center"></div>
+    </section>
+
+    <section class="view" id="view-chat" hidden>
+      <div id="messages"><div class="thread" id="thread"></div></div>
+      <div class="dock" id="dock"></div>
+    </section>
+
+    <section class="view" id="view-admin" hidden>
+      <div class="admin-wrap">
+        <h1>Administration</h1>
+        <div class="tabs">
+          <button data-tab="users" class="active">Users</button>
+          <button data-tab="chats">All chats</button>
+          <button data-tab="usage">Usage</button>
+        </div>
+        <div id="admin-users">
+          <form class="form-row" id="add-user-form">
+            <input type="text" id="nu-name" placeholder="username" required pattern="[A-Za-z0-9_.-]+">
+            <input type="password" id="nu-pass" placeholder="password" required minlength="4">
+            <input type="text" id="nu-budget" placeholder="token budget (blank = default)" inputmode="numeric" pattern="[0-9]*" style="width:220px">
+            <label><input type="checkbox" id="nu-admin"> admin</label>
+            <button class="btn" type="submit">Add user</button>
+            <span class="error" id="nu-error"></span>
+          </form>
+          <table><thead><tr><th>Username</th><th>Role</th><th>Created</th><th class="num">Token budget</th><th></th></tr></thead><tbody id="users-body"></tbody></table>
+        </div>
+        <div id="admin-chats" hidden>
+          <table><thead><tr><th>User</th><th>Title</th><th>Started</th><th>Last activity</th></tr></thead><tbody id="chats-body"></tbody></table>
+        </div>
+        <div id="admin-usage" hidden>
+          <div class="summary-cards" id="usage-cards"></div>
+          <table>
+            <thead><tr><th>User</th><th class="num">Replies</th><th class="num">Input</th><th class="num">Output</th><th class="num">Used</th><th class="num">Budget</th><th style="width:30%">Remaining</th></tr></thead>
+            <tbody id="usage-body"></tbody>
+            <tfoot><tr id="usage-totals"></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<template id="composer-tpl">
+  <div class="composer">
+    <textarea rows="1" placeholder="How can I help you today?"></textarea>
+    <div class="composer-row">
+      <span class="model" id="model-label"></span>
+      <button class="send" title="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+    </div>
+  </div>
+  <div class="hint">Enter to send, Shift+Enter for a new line</div>
+</template>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const state = { token: null, user: null, info: null, conversations: [], current: null, readonly: false, streaming: false };
+
+  // ---------- api ----------
+  const authHeaders = () => ({ Authorization: `Bearer ${state.token}` });
+  async function api(path, opts = {}) {
+    const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) } });
+    if (res.status === 401) { logout(); throw new Error('Signed out'); }
+    if (!res.ok) { let d = res.statusText; try { d = (await res.json()).detail || d; } catch {} throw new Error(typeof d === 'string' ? d : JSON.stringify(d)); }
+    return res.status === 204 ? null : res.json();
+  }
+
+  // ---------- auth ----------
+  function logout() {
+    state.token = null; state.user = null; state.current = null;
+    try { localStorage.removeItem('token'); } catch {}
+    $('#app').hidden = true; $('#login').hidden = false;
+  }
+  $('#login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#login-error').textContent = '';
+    try {
+      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: $('#login-user').value.trim(), password: $('#login-pass').value }) });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Login failed');
+      const data = await res.json();
+      state.token = data.access_token; try { localStorage.setItem('token', state.token); } catch {}
+      await boot();
+    } catch (err) { $('#login-error').textContent = err.message; }
+  });
+  $('#logout').addEventListener('click', logout);
+
+  async function boot() {
+    try { state.user = await api('/api/auth/me'); } catch { return logout(); }
+    state.info = await api('/api/info');
+    $('#login').hidden = true; $('#app').hidden = false;
+    $('#avatar').textContent = state.user.username[0].toUpperCase();
+    $('#who-name').textContent = state.user.username;
+    $('#who-role').textContent = state.user.is_admin ? 'admin' : 'member';
+    $('#admin-link').hidden = !state.user.is_admin;
+    $('#badge').textContent = `${state.info.provider} · ${state.info.model} · ${state.info.chat_store}`;
+    const h = new Date().getHours();
+    $('#greeting-text').textContent = `${h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}, ${state.user.username}`;
+    await refreshConversations();
+    await refreshBudget();
+    showHome();
+  }
+
+  // ---------- sidebar ----------
+  $('#collapse').addEventListener('click', () => setSidebar(false));
+  $('#expand').addEventListener('click', () => setSidebar(true));
+  function setSidebar(open) {
+    $('#sidebar').classList.toggle('collapsed', !open);
+    $('#expand').hidden = open;
+    try { localStorage.setItem('sidebar', open ? '1' : '0'); } catch {}
+  }
+  try { if (localStorage.getItem('sidebar') === '0') setSidebar(false); } catch {}
+  $('#new-chat').addEventListener('click', showHome);
+
+  async function refreshConversations() {
+    state.conversations = await api('/api/conversations');
+    const ul = $('#conv-list'); ul.innerHTML = '';
+    for (const c of state.conversations) {
+      const li = document.createElement('li');
+      li.classList.toggle('active', state.current?.id === c.id && !state.readonly);
+      li.innerHTML = `<span class="dot"></span><span class="title"></span><button class="del" title="Delete">×</button>`;
+      $('.title', li).textContent = c.title;
+      li.addEventListener('click', () => openConversation(c.id));
+      $('.del', li).addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${c.title}"?`)) return;
+        await api(`/api/conversations/${c.id}`, { method: 'DELETE' });
+        if (state.current?.id === c.id) showHome(); else refreshConversations();
+      });
+      ul.appendChild(li);
+    }
+  }
+
+  // ---------- composer ----------
+  const composer = $('#composer-tpl').content.cloneNode(true);
+  const composerEl = $('.composer', composer), hintEl = $('.hint', composer);
+  const ta = $('textarea', composerEl), sendBtn = $('.send', composerEl);
+  function mountComposer(slot) { slot.appendChild(composerEl); slot.appendChild(hintEl); ta.focus(); }
+  ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, window.innerHeight * .4) + 'px'; });
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+  sendBtn.addEventListener('click', submit);
+  function setModelLabel() {
+    const m = $('#model-label', composerEl);
+    m.innerHTML = state.info ? `<b></b> <span></span>` : '';
+    if (state.info) { $('b', m).textContent = prettyModel(state.info.model); $('span', m).textContent = state.info.provider; }
+  }
+  const fmtNum = (n) => n.toLocaleString();
+  const fmtK = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n);
+  async function refreshBudget() {
+    const b = await api('/api/auth/me/usage');
+    const pct = b.budget ? Math.min(100, b.used / b.budget * 100) : 100;
+    $('#budget-used').textContent = `${fmtK(b.used)} / ${fmtK(b.budget)} tokens`;
+    $('#budget-period').textContent = b.period === 'all' ? 'all time' : `this ${b.period}`;
+    $('#budget-fill').style.width = pct + '%';
+    $('#budget-remaining').textContent = b.remaining > 0 ? `${fmtK(b.remaining)} remaining` : 'Budget exhausted';
+    $('#budget').classList.toggle('warn', pct >= 90);
+  }
+  const prettyModel = (id) => id.startsWith('claude-') ? id.replace('claude-', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : id;
+
+  async function submit() {
+    const content = ta.value.trim();
+    if (!content || state.streaming || state.readonly) return;
+    ta.value = ''; ta.style.height = 'auto';
+    if (!state.current) {
+      state.current = await api('/api/conversations', { method: 'POST', body: JSON.stringify({}) });
+      showChat(state.current, []);
+    }
+    await streamMessage(state.current.id, content);
+  }
+
+  // ---------- views ----------
+  function showView(id) { for (const v of document.querySelectorAll('.view')) v.hidden = v.id !== id; $('#admin-link').classList.toggle('active', id === 'view-admin'); }
+  function showHome() {
+    state.current = null; state.readonly = false;
+    $('#crumb').textContent = '';
+    setModelLabel(); mountComposer($('#home-composer-slot'));
+    showView('view-home'); refreshConversations();
+  }
+  function showChat(conv, messages, { readonly = false, owner = null } = {}) {
+    state.current = conv; state.readonly = readonly;
+    $('#crumb').textContent = conv.title;
+    const thread = $('#thread'); thread.innerHTML = '';
+    for (const m of messages) renderMessage(m, { showTime: readonly });
+    const dock = $('#dock'); dock.innerHTML = '';
+    if (readonly) {
+      const b = document.createElement('div'); b.className = 'readonly-banner';
+      b.textContent = `Viewing ${owner ?? 'another user'}'s conversation (read-only) · started ${fmtStamp(conv.created_at)}`; dock.appendChild(b);
+    } else { setModelLabel(); mountComposer(dock); }
+    showView('view-chat'); scrollToEnd(); refreshConversations();
+  }
+  async function openConversation(id) {
+    const d = await api(`/api/conversations/${id}`);
+    showChat(d.conversation, d.messages);
+  }
+
+  // ---------- messages ----------
+  const scrollToEnd = () => { const m = $('#messages'); m.scrollTop = m.scrollHeight; };
+  const fmtStamp = (s) => new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  function renderMessage(m, { showTime = false } = {}) {
+    if (showTime && m.created_at) {
+      const st = document.createElement('div'); st.className = 'stamp' + (m.role === 'user' ? ' right' : '');
+      st.textContent = fmtStamp(m.created_at); $('#thread').appendChild(st);
+    }
+    if (m.role === 'user') {
+      const el = document.createElement('div'); el.className = 'msg user'; el.textContent = m.content; $('#thread').appendChild(el); return el;
+    }
+    const el = assistantShell();
+    if (m.thinking) { setThinking(el, m.thinking, true); }
+    else el.querySelector('.thinking').remove();
+    $('.body', el).innerHTML = renderMarkdown(m.content);
+    return el;
+  }
+  function assistantShell() {
+    const el = document.createElement('div'); el.className = 'msg assistant';
+    el.innerHTML = `<svg class="spark"><use href="#spark"/></svg><div class="content">
+      <div class="thinking"><button class="thinking-toggle"><span class="chev">▸</span><span class="label">Thinking…</span></button><pre class="thinking-body" hidden></pre></div>
+      <div class="body"></div><div class="meta"></div></div>`;
+    const t = $('.thinking', el);
+    $('.thinking-toggle', el).addEventListener('click', () => { t.classList.toggle('open'); $('.thinking-body', el).hidden = !t.classList.contains('open'); });
+    $('#thread').appendChild(el); return el;
+  }
+  function setThinking(el, text, done, seconds) {
+    $('.thinking-body', el).textContent = text;
+    const label = $('.label', el);
+    label.classList.toggle('shimmer', !done);
+    label.textContent = done ? (seconds != null ? `Thought for ${seconds.toFixed(1)}s` : 'Thought process') : 'Thinking…';
+  }
+
+  async function streamMessage(convId, content) {
+    state.streaming = true; sendBtn.disabled = true;
+    renderMessage({ role: 'user', content });
+    const el = assistantShell(); const body = $('.body', el); body.classList.add('caret');
+    let text = '', thinking = '', t0 = performance.now(), tThinkStart = null, tFirstToken = null;
+    scrollToEnd();
+    try {
+      const res = await fetch(`/api/conversations/${convId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ content }) });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      await readSSE(res, (ev, data) => {
+        switch (ev) {
+          case 'user_message': if (data.title) { state.current.title = data.title; $('#crumb').textContent = data.title; } break;
+          case 'thinking_start': tThinkStart = performance.now(); setThinking(el, '', false); break;
+          case 'thinking_delta': thinking += data.text; setThinking(el, thinking, false); break;
+          case 'thinking_stop': setThinking(el, thinking, true, (performance.now() - (tThinkStart ?? t0)) / 1000); break;
+          case 'text_delta':
+            if (tFirstToken == null) { tFirstToken = performance.now(); if (!thinking) $('.thinking', el).remove(); }
+            text += data.text; body.innerHTML = renderMarkdown(text); break;
+          case 'done':
+            body.classList.remove('caret');
+            $('.meta', el).textContent = `${data.output_tokens} tokens · first token ${(((tFirstToken ?? performance.now()) - t0) / 1000).toFixed(1)}s · total ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+            break;
+          case 'error': body.classList.remove('caret'); $('.meta', el).innerHTML = `<span class="error"></span>`; $('.error', el).textContent = data.detail; break;
+        }
+        scrollToEnd();
+      });
+    } catch (err) {
+      body.classList.remove('caret'); $('.meta', el).innerHTML = '<span class="error"></span>'; $('.error', el).textContent = err.message;
+    } finally {
+      state.streaming = false; sendBtn.disabled = false; ta.focus(); refreshConversations(); refreshBudget();
+    }
+  }
+
+  async function readSSE(res, onEvent) {
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const raw = buf.slice(0, i); buf = buf.slice(i + 2);
+        let ev = 'message', data = '';
+        for (const line of raw.split('\n')) { if (line.startsWith('event: ')) ev = line.slice(7); else if (line.startsWith('data: ')) data += line.slice(6); }
+        onEvent(ev, data ? JSON.parse(data) : {});
+      }
+    }
+  }
+
+  // Minimal markdown: fenced code, inline code, bold, lists, paragraphs. Escapes first.
+  const esc = (s) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function renderMarkdown(src) {
+    const parts = src.split(/```/); let out = '';
+    parts.forEach((part, i) => {
+      if (i % 2 === 1) { const nl = part.indexOf('\n'); const code = nl >= 0 ? part.slice(nl + 1) : part; out += `<pre><code>${esc(code)}</code></pre>`; return; }
+      for (const block of part.split(/\n{2,}/)) {
+        if (!block.trim()) continue;
+        const lines = block.split('\n');
+        if (lines.every(l => /^\s*[-*] /.test(l))) { out += '<ul>' + lines.map(l => `<li>${inline(l.replace(/^\s*[-*] /, ''))}</li>`).join('') + '</ul>'; continue; }
+        if (lines.every(l => /^\s*\d+\. /.test(l))) { out += '<ol>' + lines.map(l => `<li>${inline(l.replace(/^\s*\d+\. /, ''))}</li>`).join('') + '</ol>'; continue; }
+        out += `<p>${inline(block).replace(/\n/g, '<br>')}</p>`;
+      }
+    });
+    return out;
+  }
+  const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  // ---------- admin ----------
+  $('#admin-link').addEventListener('click', () => { state.current = null; showView('view-admin'); $('#crumb').textContent = 'Admin'; loadAdminTab(activeTab); refreshConversations(); });
+  let activeTab = 'users';
+  for (const b of document.querySelectorAll('.tabs button')) b.addEventListener('click', () => {
+    activeTab = b.dataset.tab;
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+    for (const t of ['users', 'chats', 'usage']) $(`#admin-${t}`).hidden = t !== activeTab;
+    loadAdminTab(activeTab);
+  });
+  const fmtDate = (s) => new Date(s).toLocaleString();
+  async function loadAdminTab(tab) {
+    if (tab === 'users') {
+      const users = await api('/api/admin/users'); const tb = $('#users-body'); tb.innerHTML = '';
+      for (const u of users) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td></td><td>${u.is_admin ? '<span class="pill">admin</span>' : 'member'}</td><td></td><td class="num"></td><td style="text-align:right"></td>`;
+        tr.children[0].textContent = u.username; tr.children[2].textContent = fmtDate(u.created_at);
+        tr.children[3].appendChild(budgetEditor(u));
+        if (u.id !== state.user.id) {
+          const del = document.createElement('button'); del.className = 'btn ghost'; del.textContent = 'Remove';
+          del.addEventListener('click', async () => { if (confirm(`Remove ${u.username}?`)) { await api(`/api/admin/users/${u.id}`, { method: 'DELETE' }); loadAdminTab('users'); } });
+          tr.children[4].appendChild(del);
+        }
+        tb.appendChild(tr);
+      }
+    } else if (tab === 'chats') {
+      const rows = await api('/api/admin/conversations'); const tb = $('#chats-body'); tb.innerHTML = '';
+      for (const c of rows) {
+        const tr = document.createElement('tr'); tr.className = 'clickable';
+        tr.innerHTML = `<td></td><td></td><td></td><td></td>`;
+        tr.children[0].textContent = c.username ?? c.user_id; tr.children[1].textContent = c.title;
+        tr.children[2].textContent = fmtDate(c.created_at); tr.children[3].textContent = fmtDate(c.updated_at);
+        tr.addEventListener('click', async () => {
+          const d = await api(`/api/admin/conversations/${c.id}`);
+          const mine = d.conversation.user_id === state.user.id;
+          showChat(d.conversation, d.messages, { readonly: !mine, owner: d.conversation.username });
+        });
+        tb.appendChild(tr);
+      }
+    } else {
+      const rep = await api('/api/admin/usage'); const tb = $('#usage-body'); tb.innerHTML = '';
+      const t = rep.totals, periodLabel = rep.period === 'all' ? 'all time' : `this ${rep.period}`;
+      $('#usage-cards').innerHTML = [
+        ['Tokens used ' + periodLabel, fmtNum(t.used)], ['Input', fmtNum(t.input_tokens)], ['Output', fmtNum(t.output_tokens)],
+        ['Replies', fmtNum(t.messages)], ['Users', fmtNum(t.users)], ['Combined budget', fmtNum(t.budget)],
+      ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+      for (const r of rep.users) {
+        const tr = document.createElement('tr');
+        const pct = r.budget ? Math.min(100, r.used / r.budget * 100) : 100;
+        tr.innerHTML = `<td></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>
+          <td><div class="budget ${pct >= 90 ? 'warn' : ''}" style="padding:0"><div class="bar"><div class="fill" style="width:${pct}%"></div></div><span></span></div></td>`;
+        tr.children[0].textContent = r.username + (r.is_admin ? ' (admin)' : '');
+        tr.children[1].textContent = fmtNum(r.messages); tr.children[2].textContent = fmtNum(r.input_tokens);
+        tr.children[3].textContent = fmtNum(r.output_tokens); tr.children[4].textContent = fmtNum(r.used);
+        tr.children[5].textContent = fmtNum(r.budget) + (r.budget_is_default ? '' : ' *');
+        $('span', tr.children[6]).textContent = `${fmtNum(r.remaining)} left (${pct.toFixed(0)}% used)`;
+        tb.appendChild(tr);
+      }
+      $('#usage-totals').innerHTML = `<td>Total (${t.users} users)</td><td class="num">${fmtNum(t.messages)}</td><td class="num">${fmtNum(t.input_tokens)}</td><td class="num">${fmtNum(t.output_tokens)}</td><td class="num">${fmtNum(t.used)}</td><td class="num">${fmtNum(t.budget)}</td><td>${fmtNum(Math.max(t.budget - t.used, 0))} left</td>`;
+    }
+  }
+  function budgetEditor(u) {
+    const inp = document.createElement('input'); inp.className = 'budget-edit'; inp.placeholder = 'default';
+    inp.value = u.token_budget ?? ''; inp.title = 'Token budget per period. Blank uses the default. Enter to save.';
+    inp.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      const v = inp.value.trim();
+      try {
+        const upd = await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ token_budget: v === '' ? null : Number(v) }) });
+        inp.value = upd.token_budget ?? ''; inp.blur(); if (u.id === state.user.id) refreshBudget();
+      } catch (err) { alert(err.message); }
+    });
+    return inp;
+  }
+  $('#add-user-form').addEventListener('submit', async (e) => {
+    e.preventDefault(); $('#nu-error').textContent = '';
+    try {
+      const budget = $('#nu-budget').value.trim();
+      await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ username: $('#nu-name').value.trim(), password: $('#nu-pass').value, is_admin: $('#nu-admin').checked, token_budget: budget === '' ? null : Number(budget) }) });
+      $('#nu-name').value = ''; $('#nu-pass').value = ''; $('#nu-budget').value = ''; $('#nu-admin').checked = false; loadAdminTab('users');
+    } catch (err) { $('#nu-error').textContent = err.message; }
+  });
+
+  // ---------- start ----------
+  try { state.token = localStorage.getItem('token'); } catch {}
+  if (state.token) boot(); else logout();
+})();
+</script>
+</body>
+</html>
