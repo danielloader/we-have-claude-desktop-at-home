@@ -1,6 +1,6 @@
 # Local stub mode in a container: `docker compose up --build`, then open http://127.0.0.1:8765
-# Switch modes by editing .env (see README "Running modes"); the paths below always win so
-# state lands on the named volume regardless of what .env says.
+# Switch modes by editing .env (see README "Running modes"); the values below always win so
+# state lands on the named volume and telemetry lands in the container logs.
 services:
   app:
     build: .
@@ -11,7 +11,7 @@ services:
         required: false
     environment:
       APP_SQLITE_PATH: /data/app.db
-      APP_TELEMETRY_FILE: /data/telemetry.log
+      APP_TELEMETRY_FILE: /dev/stderr   # telemetry in `docker compose logs`; set a /data path to tail a file instead
     volumes:
       - app-data:/data
     restart: unless-stopped

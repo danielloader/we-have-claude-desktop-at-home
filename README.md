@@ -44,6 +44,10 @@ they can be mixed freely.
 | `APP_CHAT_STORE` | `sqlite`, `elastic` | `sqlite` |
 | `APP_TELEMETRY` | `file`, `elastic_apm`, `none` | `file` |
 
+With `file`, `APP_TELEMETRY_FILE` is a path to append to (default `./data/telemetry.log`,
+for `tail -f`) or `/dev/stderr` to write into the process output, which is what the Docker
+image does so telemetry lands in `docker logs`.
+
 The three configurations below are the ones most people want.
 
 ### Mode 1: local development with stubs
@@ -189,12 +193,12 @@ lives under the `/data` volume.
 ```bash
 docker compose up --build
 open http://127.0.0.1:8765
-docker compose exec app tail -f /data/telemetry.log
+docker compose logs -f app          # server log and telemetry lines together
 ```
 
 `compose.yaml` reads `.env` if present, so the same file that drives `uv run` drives the
-container. The two path variables are pinned to `/data` in the compose file so they cannot
-be pointed at the ephemeral container filesystem by accident.
+container. It pins the SQLite path to the `/data` volume and telemetry to `/dev/stderr`, so
+state survives restarts and telemetry goes wherever your container logs go.
 
 ### Plain docker
 
@@ -225,7 +229,7 @@ file and passed with `--env-file`. Inside the container the defaults are:
 | Variable | Container default | Why |
 |----------|-------------------|-----|
 | `APP_SQLITE_PATH` | `/data/app.db` | on the volume, survives restarts |
-| `APP_TELEMETRY_FILE` | `/data/telemetry.log` | tail it with `docker exec <name> tail -f /data/telemetry.log` |
+| `APP_TELEMETRY_FILE` | `/dev/stderr` | telemetry lines appear in `docker logs` alongside uvicorn's; set `/data/telemetry.log` to tail a file instead |
 | port | `8000` | map with `-p host:8000` |
 
 The container runs one uvicorn worker. Scale by running more containers behind a load

@@ -1,11 +1,13 @@
-"""Stub telemetry: one line per transaction, span or metric, appended to a file.
+"""Stub telemetry: one line per transaction, span or metric, appended to a file or stream.
 
-Tail it with `tail -f data/telemetry.log`. Spans and metrics carry the id of the request
-they happened in, so a single request can be followed with `grep <id>`.
+Tail it with `tail -f data/telemetry.log`, or point it at `/dev/stderr` so it lands in the
+process output (`docker logs`). Spans and metrics carry the id of the request they happened
+in, so a single request can be followed with `grep <id>`.
 """
 
 import contextvars
 import json
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -33,8 +35,18 @@ class FileTelemetry:
     name = "file"
 
     def __init__(self, path: str, *, fmt: Literal["text", "jsonl"] = "text") -> None:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._fh: IO[str] = open(path, "a", buffering=1)  # line-buffered so tail -f sees it immediately
+        # Use the process streams directly rather than reopening the device node, which
+        # fails when stderr is a socket (some container runtimes).
+        if path in ("-", "stderr", "/dev/stderr"):
+            self._fh: IO[str] = sys.stderr
+            self._owned = False
+        elif path in ("stdout", "/dev/stdout"):
+            self._fh = sys.stdout
+            self._owned = False
+        else:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            self._fh = open(path, "a", buffering=1)  # line-buffered so tail -f sees it immediately
+            self._owned = True
         self._fmt = fmt
 
     def install(self, app: FastAPI) -> None:
@@ -65,7 +77,10 @@ class FileTelemetry:
             txn.labels["user_id"] = user_id
 
     async def close(self) -> None:
-        self._fh.close()
+        if self._owned:
+            self._fh.close()
+        else:
+            self._fh.flush()
 
     # -- internals -------------------------------------------------------------------
 
@@ -78,10 +93,12 @@ class FileTelemetry:
             "name": name,
             **{k: v for k, v in fields.items() if v is not None},
         }
-        if self._fmt == "jsonl":
-            self._fh.write(json.dumps(record) + "\n")
-        else:
-            self._fh.write(_text_line(record) + "\n")
+        self._emit(record)
+
+    def _emit(self, record: dict[str, Any]) -> None:
+        self._fh.write((json.dumps(record) if self._fmt == "jsonl" else _text_line(record)) + "\n")
+        if not self._owned:
+            self._fh.flush()
 
 
 def _text_line(r: dict[str, Any]) -> str:
@@ -121,18 +138,15 @@ class _RequestMiddleware:
             route = scope.get("route")
             name = f"{scope['method']} {route.path}" if route is not None else txn.name
             # Written after the response so the line carries status and total duration.
-            self.telemetry._fh.write(
-                (json.dumps if self.telemetry._fmt == "jsonl" else _text_line)(
-                    {
-                        "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
-                        "type": "txn",
-                        "txn": txn.id,
-                        "name": name,
-                        "status": status["code"],
-                        "duration_ms": _ms(txn.started),
-                        **({"user": txn.user} if txn.user else {}),
-                        **txn.labels,
-                    }
-                )
-                + "\n"
+            self.telemetry._emit(
+                {
+                    "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
+                    "type": "txn",
+                    "txn": txn.id,
+                    "name": name,
+                    "status": status["code"],
+                    "duration_ms": _ms(txn.started),
+                    **({"user": txn.user} if txn.user else {}),
+                    **txn.labels,
+                }
             )

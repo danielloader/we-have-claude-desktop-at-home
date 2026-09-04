@@ -225,7 +225,9 @@ same proxy will wrap a future store without change.
 ### The file stub
 
 `FileTelemetry` appends one line per transaction, span or metric to a file, line-buffered so
-`tail -f data/telemetry.log` shows each line as it happens. Its middleware is pure ASGI (not
+`tail -f data/telemetry.log` shows each line as it happens. Point it at `/dev/stderr` (the
+Docker image's default) and the same lines go to the process output, where a container
+runtime or log shipper already collects them; no volume or sidecar is needed. Its middleware is pure ASGI (not
 Starlette's `BaseHTTPMiddleware`) so that the transaction's duration covers the entire
 streamed response and so that the request id, kept in a `contextvars.ContextVar`, is
 visible inside the streaming generator. Spans and metrics print that id, so one request can

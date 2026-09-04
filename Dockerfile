@@ -19,7 +19,7 @@ COPY --chown=app:app app ./app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     APP_SQLITE_PATH=/data/app.db \
-    APP_TELEMETRY_FILE=/data/telemetry.log
+    APP_TELEMETRY_FILE=/dev/stderr
 USER app
 VOLUME ["/data"]
 EXPOSE 8000
