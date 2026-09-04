@@ -6,12 +6,12 @@ from collections.abc import AsyncIterator
 from .base import ChatTurn, StreamEvent
 
 THINKING_TEMPLATES = [
-    "The user is asking about \"{prompt}\". I should give a direct answer first, then a short "
+    'The user is asking about "{prompt}". I should give a direct answer first, then a short '
     "explanation with one concrete example. No need to over-elaborate here.",
-    "Let me think about what they actually need. \"{prompt}\" could be read a couple of ways; "
+    'Let me think about what they actually need. "{prompt}" could be read a couple of ways; '
     "I'll take the most common interpretation and note the alternative briefly.",
     "Breaking this down: what is being asked, what the constraints are, and what a useful "
-    "answer looks like. The core of \"{prompt}\" is fairly standard, so keep it tight.",
+    'answer looks like. The core of "{prompt}" is fairly standard, so keep it tight.',
 ]
 
 RESPONSE_TEMPLATE = """Here's a fixed response from the local stub provider.

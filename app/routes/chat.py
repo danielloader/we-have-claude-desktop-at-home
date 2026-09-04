@@ -46,7 +46,9 @@ async def create_conversation(
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
-async def get_conversation(conversation_id: str, claims: CurrentUser, chats: ChatStoreDep) -> ConversationDetail:
+async def get_conversation(
+    conversation_id: str, claims: CurrentUser, chats: ChatStoreDep
+) -> ConversationDetail:
     conv = await _owned(chats, conversation_id, claims)
     return ConversationDetail(conversation=conv, messages=await chats.list_messages(conv.id))
 
@@ -111,7 +113,11 @@ async def send_message(
                 async for ev in llm.stream(turns, system=settings.system_prompt):
                     if ev.type == "text_delta":
                         if not text:
-                            telemetry.gauge("llm.time_to_first_token_ms", round((time.monotonic() - started) * 1000, 1), **labels)
+                            telemetry.gauge(
+                                "llm.time_to_first_token_ms",
+                                round((time.monotonic() - started) * 1000, 1),
+                                **labels,
+                            )
                         text.append(ev.text)
                     elif ev.type == "thinking_delta":
                         thinking.append(ev.text)
@@ -119,7 +125,9 @@ async def send_message(
                         telemetry.counter("llm.requests", **labels)
                         telemetry.counter("llm.input_tokens", ev.input_tokens, **labels)
                         telemetry.counter("llm.output_tokens", ev.output_tokens, **labels)
-                        telemetry.gauge("llm.duration_ms", round((time.monotonic() - started) * 1000, 1), **labels)
+                        telemetry.gauge(
+                            "llm.duration_ms", round((time.monotonic() - started) * 1000, 1), **labels
+                        )
                         if ev.stop_reason == "refusal" and not text:
                             text.append("The model declined to answer this request.")
                         assistant = Message(

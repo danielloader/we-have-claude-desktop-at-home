@@ -122,7 +122,9 @@ class _RequestMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        txn = _Transaction(id=uuid.uuid4().hex[:8], name=f"{scope['method']} {scope['path']}", started=time.perf_counter())
+        txn = _Transaction(
+            id=uuid.uuid4().hex[:8], name=f"{scope['method']} {scope['path']}", started=time.perf_counter()
+        )
         token = _current.set(txn)
         status = {"code": None}
 

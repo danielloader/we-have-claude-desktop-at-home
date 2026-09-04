@@ -88,7 +88,12 @@ class AnthropicProvider:
             final = await stream.get_final_message()
 
         if final.stop_reason == "refusal":
-            log.warning("provider=%s model=%s refused: %s", self.name, final.model, final.stop_details)
+            log.warning(
+                "provider=%s model=%s refused: %s",
+                self.name,
+                final.model,
+                getattr(final, "stop_details", None),
+            )
         yield StreamEvent(
             "done",
             input_tokens=final.usage.input_tokens,

@@ -59,7 +59,9 @@ async def budget_statuses(users: list[User], chats: ChatStore, settings: Setting
     return out
 
 
-def _status(user: User, messages: int, inp: int, out: int, settings: Settings, since: datetime | None) -> BudgetStatus:
+def _status(
+    user: User, messages: int, inp: int, out: int, settings: Settings, since: datetime | None
+) -> BudgetStatus:
     budget = user.token_budget if user.token_budget is not None else settings.default_token_budget
     used = inp + out
     return BudgetStatus(

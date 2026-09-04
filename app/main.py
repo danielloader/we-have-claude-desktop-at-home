@@ -41,7 +41,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.llm = build_llm(settings)
         log.info(
             "provider=%s model=%s chat_store=%s telemetry=%s",
-            app.state.llm.name, app.state.llm.model, settings.chat_store, telemetry.name,
+            app.state.llm.name,
+            app.state.llm.model,
+            settings.chat_store,
+            telemetry.name,
         )
         yield
         await chat_store.close()

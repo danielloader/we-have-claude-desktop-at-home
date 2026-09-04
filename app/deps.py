@@ -43,7 +43,7 @@ async def current_user(
     try:
         claims = decode_token(creds.credentials, secret=settings.jwt_secret)
     except jwt.PyJWTError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from None
     telemetry.set_user(claims.sub, claims.username)
     return claims
 

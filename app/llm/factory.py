@@ -13,9 +13,7 @@ def build_llm(settings: Settings) -> LLMProvider:
                 stall_probability=settings.stub_stall_probability,
             )
         case "anthropic":
-            return AnthropicProvider.anthropic(
-                model=settings.llm_model, max_tokens=settings.llm_max_tokens
-            )
+            return AnthropicProvider.anthropic(model=settings.llm_model, max_tokens=settings.llm_max_tokens)
         case "azure":
             if not settings.azure_resource:
                 raise RuntimeError("APP_AZURE_RESOURCE is required for the azure provider")

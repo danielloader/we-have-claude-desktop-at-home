@@ -89,7 +89,9 @@ class SqliteUserStore(_SqliteBase):
     async def create_user(
         self, username: str, password_hash: str, is_admin: bool, token_budget: int | None = None
     ) -> User:
-        user = User(id=new_id(), username=username, is_admin=is_admin, token_budget=token_budget, created_at=now())
+        user = User(
+            id=new_id(), username=username, is_admin=is_admin, token_budget=token_budget, created_at=now()
+        )
         await self.db.execute(
             "INSERT INTO users (id, username, password_hash, is_admin, token_budget, created_at)"
             " VALUES (?,?,?,?,?,?)",

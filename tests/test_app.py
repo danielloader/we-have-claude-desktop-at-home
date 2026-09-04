@@ -132,16 +132,27 @@ def test_admin_user_lifecycle(client):
     admin = login(client, "admin", "admin")
     me = client.get("/api/auth/me", headers=auth(admin)).json()
 
-    res = client.post("/api/admin/users", json={"username": "carol", "password": "carol1"}, headers=auth(admin))
+    res = client.post(
+        "/api/admin/users", json={"username": "carol", "password": "carol1"}, headers=auth(admin)
+    )
     assert res.status_code == 201
     carol = res.json()
-    assert client.post("/api/admin/users", json={"username": "carol", "password": "x1234"}, headers=auth(admin)).status_code == 409
+    assert (
+        client.post(
+            "/api/admin/users", json={"username": "carol", "password": "x1234"}, headers=auth(admin)
+        ).status_code
+        == 409
+    )
     login(client, "carol", "carol1")
 
     assert client.delete(f"/api/admin/users/{me['id']}", headers=auth(admin)).status_code == 400
     assert client.delete(f"/api/admin/users/{carol['id']}", headers=auth(admin)).status_code == 204
     assert client.post("/api/auth/login", json={"username": "carol", "password": "carol1"}).status_code == 401
-    assert {u["username"] for u in client.get("/api/admin/users", headers=auth(admin)).json()} == {"admin", "alice", "bob"}
+    assert {u["username"] for u in client.get("/api/admin/users", headers=auth(admin)).json()} == {
+        "admin",
+        "alice",
+        "bob",
+    }
 
 
 def test_usage_is_attributed_to_jwt_subject(client):
@@ -171,7 +182,9 @@ def test_token_budget_is_enforced_and_editable(client):
 
     res = client.patch(f"/api/admin/users/{alice_id}", json={"token_budget": 1}, headers=auth(admin))
     assert res.status_code == 200 and res.json()["token_budget"] == 1
-    res = client.post(f"/api/conversations/{conv['id']}/messages", json={"content": "again"}, headers=auth(alice))
+    res = client.post(
+        f"/api/conversations/{conv['id']}/messages", json={"content": "again"}, headers=auth(alice)
+    )
     assert res.status_code == 429
     assert client.get("/api/auth/me/usage", headers=auth(alice)).json()["remaining"] == 0
 
@@ -183,7 +196,10 @@ def test_token_budget_is_enforced_and_editable(client):
 
 def test_info_reports_stub_provider(client):
     assert client.get("/api/info").json() == {
-        "provider": "stub", "model": "stub-fixed-response", "chat_store": "sqlite", "telemetry": "file",
+        "provider": "stub",
+        "model": "stub-fixed-response",
+        "chat_store": "sqlite",
+        "telemetry": "file",
     }
 
 
@@ -193,11 +209,19 @@ def test_file_telemetry_records_request_span_and_metrics(client, tmp_path):
     send(client, alice, conv["id"], "trace me")
 
     lines = (tmp_path / "telemetry.log").read_text().splitlines()
-    txns = [l for l in lines if " txn " in l and "/api/conversations/{conversation_id}/messages" in l]
+    txns = [
+        line for line in lines if " txn " in line and "/api/conversations/{conversation_id}/messages" in line
+    ]
     assert len(txns) == 1 and "status=200" in txns[0] and "user=alice" in txns[0]
     txn_id = txns[0].split()[2]
-    in_request = [l for l in lines if l.split()[2] == txn_id]
-    names = {l.split()[3] for l in in_request}
-    assert {"llm.stream", "store.append_message", "store.record_usage", "llm.output_tokens", "llm.time_to_first_token_ms"} <= names
+    in_request = [line for line in lines if line.split()[2] == txn_id]
+    names = {line.split()[3] for line in in_request}
+    assert {
+        "llm.stream",
+        "store.append_message",
+        "store.record_usage",
+        "llm.output_tokens",
+        "llm.time_to_first_token_ms",
+    } <= names
     # Login does not create a user span before authentication, but the store call is traced.
-    assert any(" span " in l and "store.get_by_username" in l for l in lines)
+    assert any(" span " in line and "store.get_by_username" in line for line in lines)

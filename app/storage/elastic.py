@@ -138,8 +138,12 @@ class ElasticChatStore:
         return [Message.model_validate(h["_source"]) for h in resp["hits"]["hits"]]
 
     async def record_usage(self, record: UsageRecord) -> None:
+        # wait_for so the budget check that follows a reply sees this record.
         await self._es.index(
-            index=self._idx("usage"), id=record.id, document=record.model_dump(mode="json")
+            index=self._idx("usage"),
+            id=record.id,
+            document=record.model_dump(mode="json"),
+            refresh="wait_for",
         )
 
     async def usage_summary(self, *, since: datetime | None = None) -> list[UsageSummary]:

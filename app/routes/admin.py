@@ -54,7 +54,9 @@ async def list_users(_: AdminUser, users: UserStoreDep) -> list[User]:
 async def create_user(body: CreateUserRequest, _: AdminUser, users: UserStoreDep) -> User:
     if await users.get_by_username(body.username):
         raise HTTPException(status.HTTP_409_CONFLICT, "Username already taken")
-    return await users.create_user(body.username, hash_password(body.password), body.is_admin, body.token_budget)
+    return await users.create_user(
+        body.username, hash_password(body.password), body.is_admin, body.token_budget
+    )
 
 
 @router.patch("/users/{user_id}", response_model=User)

@@ -17,7 +17,7 @@ open http://127.0.0.1:8765
 tail -f data/telemetry.log        # in another terminal
 ```
 
-`uv run pytest` runs the end-to-end tests.
+`uv run pytest` runs the end-to-end tests; `uvx ruff check app tests` and `uvx ruff format --check app tests` lint and format-check (config in `pyproject.toml`).
 
 ### Test credentials
 
