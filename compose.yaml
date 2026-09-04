@@ -1,20 +1,65 @@
-# Local stub mode in a container: `docker compose up --build`, then open http://127.0.0.1:8765
-# Switch modes by editing .env (see README "Running modes"); the values below always win so
-# state lands on the named volume and telemetry lands in the container logs.
+# Local development stack: the app with hot reload plus a local CPU model served by Ollama.
+#
+#   docker compose up --build          # then open http://127.0.0.1:8765
+#   docker compose logs -f app         # server log with telemetry lines (requests, spans, metrics)
+#
+# First start pulls the model (about 0.5 GB for qwen3:0.6b) into the ollama-models volume;
+# the ollama service only reports healthy once the model is present, so the app waits for it.
+# app/ is bind-mounted and uvicorn runs with --reload, so edits take effect without a rebuild.
+#
+# Variables below are read from the shell or from .env (compose interpolates .env too):
+#   OLLAMA_MODEL       model to pull and serve            default qwen3:0.6b
+#   APP_LLM_PROVIDER   ollama | stub | anthropic | azure  default ollama (uv run defaults to stub)
+#   APP_LLM_MODEL      model name the app requests        default OLLAMA_MODEL
+# Everything else in .env is passed to the app unchanged, except the paths pinned under
+# `environment`, which keep state on the named volume and telemetry in the container logs.
+# For a production-shaped container (no reload, no bind mount) see README "Plain docker".
 services:
   app:
     build: .
+    image: claude-at-home
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
     ports:
       - "8765:8000"
     env_file:
       - path: .env
         required: false
     environment:
+      APP_LLM_PROVIDER: ${APP_LLM_PROVIDER:-ollama}
+      APP_LLM_MODEL: ${APP_LLM_MODEL:-${OLLAMA_MODEL:-qwen3:0.6b}}
+      APP_OLLAMA_URL: http://ollama:11434
       APP_SQLITE_PATH: /data/app.db
-      APP_TELEMETRY_FILE: /dev/stderr   # telemetry in `docker compose logs`; set a /data path to tail a file instead
+      APP_TELEMETRY_FILE: /dev/stderr
+      PYTHONDONTWRITEBYTECODE: "1"   # the bind mount is read-only
     volumes:
+      - ./app:/app/app:ro
       - app-data:/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"     # lets a host-side `uv run` share this server
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull "${OLLAMA_MODEL:-qwen3:0.6b}"
+        wait
+    healthcheck:
+      test: ["CMD-SHELL", "ollama show ${OLLAMA_MODEL:-qwen3:0.6b} >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 120       # covers the first-start download
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   app-data:
+  ollama-models:

@@ -7,14 +7,25 @@ can be developed and tested on a laptop with no credentials and no token spend.
 
 `HOW-IT-WORKS.md` explains the architecture. This file explains how to run it.
 
-## Quick start (local, all stubs)
+## Quick start
+
+Two ways in. Both seed the same test users and serve the same UI on http://127.0.0.1:8765.
+
+**Native, stub model** (no Docker, nothing external):
 
 ```bash
 uv sync --group dev
 cp .env.example .env
 uv run uvicorn app.main:app --reload --port 8765
-open http://127.0.0.1:8765
 tail -f data/telemetry.log        # in another terminal
+```
+
+**Docker Compose, real local model** (the app with hot reload plus Ollama serving `qwen3:0.6b`):
+
+```bash
+cp .env.example .env
+docker compose up --build         # first start downloads the model, about 0.5 GB
+docker compose logs -f app        # server log with telemetry lines
 ```
 
 `uv run pytest` runs the end-to-end tests; `uvx ruff check app tests` and `uvx ruff format --check app tests` lint and format-check (config in `pyproject.toml`).
@@ -81,12 +92,27 @@ Keep SQLite and the telemetry file, switch only the provider. This is for checki
 prompts, streaming and thinking display behave with the real thing.
 
 **A small local model with Ollama (no account, no cost, CPU only).** `qwen3:0.6b` is about
-half a gigabyte, streams a separate thinking phase, and runs at a usable pace on a laptop CPU.
+half a gigabyte, streams a separate thinking phase, and on an Apple Silicon laptop answers in
+a couple of seconds at roughly 40 tokens per second. Three ways to run it:
+
+*Ollama installed on the host.* Install from https://ollama.com/download or `brew install
+ollama`. The desktop app runs the server for you; from a terminal install, start it yourself:
+
+```bash
+ollama serve                      # listens on http://localhost:11434; skip if the Ollama app is running
+ollama pull qwen3:0.6b
+ollama list                       # confirm the model is present
+```
+
+*Ollama in Docker, app on the host.* No install; the model lives in a named volume:
 
 ```bash
 docker run -d --name ollama -p 11434:11434 -v ollama-models:/root/.ollama ollama/ollama
 docker exec ollama ollama pull qwen3:0.6b
+docker exec ollama ollama list
 ```
+
+Then, for either of the above, point the app at it and run natively:
 
 ```dotenv
 APP_LLM_PROVIDER=ollama
@@ -94,11 +120,20 @@ APP_LLM_MODEL=qwen3:0.6b
 APP_OLLAMA_URL=http://localhost:11434
 ```
 
-Any model in the Ollama library works; `APP_OLLAMA_THINK=false` skips the thinking request
-for models that lack it (the provider also detects that and falls back on its own). Token
-counts are the model's real counts. Expect a second or two before the first token and
-somewhere between 10 and 30 tokens per second on an Apple Silicon laptop through Docker
-Desktop; slower models make the stub's pacing knobs look generous.
+```bash
+uv run uvicorn app.main:app --reload --port 8765
+```
+
+*Everything in Docker Compose.* `docker compose up --build` starts Ollama, pulls the model
+into the `ollama-models` volume, waits until it is present, and starts the app against it.
+Nothing to configure; see "Running in Docker" below for the details and how to pick a model.
+
+The first request after Ollama starts loads the model into memory and can take 20 to 30
+seconds before the thinking phase begins; every request after that starts within a second.
+
+Any model in the Ollama library works (`ollama pull <name>`, then set `APP_LLM_MODEL`).
+Models without a thinking mode are detected and handled; `APP_OLLAMA_THINK=false` skips the
+attempt. Token counts are the model's real counts.
 
 **Anthropic API:**
 
@@ -205,34 +240,55 @@ Production notes:
 The image is a two-stage build: uv installs the locked dependencies (including the
 `elastic` and `apm` extras) into a virtualenv, which is copied into a slim Python image
 that runs as a non-root user. One image serves every mode; configuration is entirely
-environment variables, and state (`users.db`, the SQLite chat store, the telemetry file)
-lives under the `/data` volume.
+environment variables, and state lives under the `/data` volume.
 
-### Stub mode with compose
+### The compose stack
+
+`compose.yaml` is the local development stack: the app with hot reload, plus Ollama serving
+a small model.
 
 ```bash
+cp .env.example .env              # optional; compose runs without it
 docker compose up --build
 open http://127.0.0.1:8765
-docker compose logs -f app          # server log and telemetry lines together
+docker compose logs -f app        # uvicorn log plus telemetry lines (requests, spans, metrics)
 ```
 
-`compose.yaml` reads `.env` if present, so the same file that drives `uv run` drives the
-container. It pins the SQLite path to the `/data` volume and telemetry to `/dev/stderr`, so
-state survives restarts and telemetry goes wherever your container logs go.
+What it does:
 
-### Local model with compose
+- **Pulls the model on first start.** The `ollama` service runs `ollama serve`, waits for it,
+  pulls `OLLAMA_MODEL` (default `qwen3:0.6b`) into the `ollama-models` volume, and only
+  reports healthy once `ollama show <model>` succeeds. The app waits for that, so the first
+  `up` takes a minute; later starts are immediate.
+- **Hot reload.** `./app` is bind-mounted read-only into the container and uvicorn runs with
+  `--reload`, so edits to Python or the static UI take effect without a rebuild. Rebuild only
+  when `pyproject.toml` or `uv.lock` change.
+- **Telemetry to stderr**, so it shows in `docker compose logs`.
+- **Shares Ollama with the host.** Port 11434 is published, so a native `uv run` with
+  `APP_OLLAMA_URL=http://localhost:11434` uses the same server and model.
 
-`compose.ollama.yaml` is an overlay that adds an Ollama service, pulls the model into a
-volume on first start, and points the app at it:
+Variables the stack reads from your shell or `.env`:
+
+| Variable | Effect | Default |
+|----------|--------|---------|
+| `OLLAMA_MODEL` | model the Ollama service pulls and serves | `qwen3:0.6b` |
+| `APP_LLM_PROVIDER` | provider the app uses inside compose | `ollama` |
+| `APP_LLM_MODEL` | model the app requests | same as `OLLAMA_MODEL` |
+
+Everything else in `.env` is passed to the app as is, so `APP_LLM_PROVIDER=anthropic` plus
+`ANTHROPIC_API_KEY` in `.env` runs the compose stack against Claude instead (Ollama still
+starts; ignore it). The SQLite path and telemetry destination are pinned by the compose file
+so they cannot be pointed at the ephemeral container filesystem by accident.
 
 ```bash
-docker compose -f compose.yaml -f compose.ollama.yaml up --build
-OLLAMA_MODEL=qwen2.5:0.5b docker compose -f compose.yaml -f compose.ollama.yaml up --build   # a different model
+OLLAMA_MODEL=qwen2.5:0.5b docker compose up --build     # a different local model
+docker compose down                                      # keep volumes (model, chat history)
+docker compose down -v                                   # remove them too
 ```
 
-The Ollama port is also published on 11434 so a host-side `uv run` can share the server.
-
 ### Plain docker
+
+For a production-shaped container: no reload, no bind mount, one uvicorn worker.
 
 ```bash
 docker build -t claude-at-home .
@@ -264,11 +320,11 @@ file and passed with `--env-file`. Inside the container the defaults are:
 | `APP_TELEMETRY_FILE` | `/dev/stderr` | telemetry lines appear in `docker logs` alongside uvicorn's; set `/data/telemetry.log` to tail a file instead |
 | port | `8000` | map with `-p host:8000` |
 
-The container runs one uvicorn worker. Scale by running more containers behind a load
-balancer rather than more workers in one container; with the SQLite user store that means
-sharing the `/data` volume or, better, replacing the user store (see production notes).
-The health check hits `/api/info`, which also reports the active provider, store and
-telemetry backend, so `docker inspect` or `curl :8000/api/info` confirms the mode.
+Scale by running more containers behind a load balancer rather than more workers in one
+container; with the SQLite user store that means sharing the `/data` volume or, better,
+replacing the user store (see production notes). The health check hits `/api/info`, which
+also reports the active provider, store and telemetry backend, so `docker inspect` or
+`curl :8000/api/info` confirms the mode.
 
 ## Layout
 
@@ -303,8 +359,7 @@ app/
   static/index.html  the UI (vanilla JS, no build step)
 tests/test_app.py    end-to-end tests through the ASGI app with the stub provider
 Dockerfile           two-stage uv build, non-root, /data volume
-compose.yaml         stub mode in a container, reads .env
-compose.ollama.yaml  overlay: local CPU model via Ollama
+compose.yaml         dev stack: app with hot reload + Ollama serving a local model
 ```
 
 ## API summary
